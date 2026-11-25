@@ -35,8 +35,7 @@ jobs:
 
   publish:
     needs: linux-x86_64
-    # Restore the branch check before merging the PR.
-    # if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-26.04
     permissions:
       contents: write
@@ -73,12 +72,11 @@ jobs:
               -f "ref=refs/tags/$tag" -f "sha=$GITHUB_SHA"
           fi
 
-          notes="Built from $GITHUB_SHA."
           if gh release view "$tag" > /dev/null 2>&1; then
             gh release upload "$tag" "${assets[@]}" --clobber
             gh release edit "$tag" --draft=false --prerelease --latest=false \
-              --title 'Nightly build' --notes "$notes"
+              --title 'Nightly build' --notes ''
           else
             gh release create "$tag" "${assets[@]}" --verify-tag --prerelease --latest=false \
-              --title 'Nightly build' --notes "$notes"
+              --title 'Nightly build' --notes ''
           fi
