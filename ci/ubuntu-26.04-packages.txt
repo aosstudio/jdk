@@ -1,0 +1,17 @@
+autoconf
+build-essential
+ca-certificates
+curl
+libasound2-dev
+libcups2-dev
+libfontconfig-dev
+libx11-dev
+libxext-dev
+libxrandr-dev
+libxrender-dev
+libxt-dev
+libxtst-dev
+openjdk-21-jdk-headless
+pkg-config
+unzip
+zip
