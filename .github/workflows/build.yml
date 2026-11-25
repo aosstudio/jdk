@@ -1,0 +1,82 @@
+name: Build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux-x86_64:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install host dependencies
+        run: |
+          sudo apt-get update
+          xargs --arg-file=ci/ubuntu-26.04-packages.txt sudo apt-get install --yes --no-install-recommends
+
+      - name: Build OpenJDK and Javadoc
+        run: make build
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: jdk-linux-x86_64
+          path: out/dist/*.tar.gz
+          compression-level: 0
+          if-no-files-found: error
+          overwrite: true
+
+      - name: Verify packaged JDK and Javadoc
+        run: make verify
+
+  publish:
+    needs: linux-x86_64
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: write
+    concurrency:
+      group: nightly-release
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: jdk-linux-x86_64
+          path: out/dist
+
+      - name: Publish nightly release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          shopt -s nullglob
+          assets=(out/dist/*.tar.gz)
+          test "${#assets[@]}" -gt 0
+          for asset in "${assets[@]}"; do
+            test -s "$asset"
+          done
+
+          tag=latest
+          ref=$(gh api "repos/$GH_REPO/git/matching-refs/tags/$tag" \
+            --jq '.[] | select(.ref == "refs/tags/latest") | .ref')
+          if [[ -n "$ref" ]]; then
+            gh api --silent --method PATCH "repos/$GH_REPO/git/refs/tags/$tag" \
+              -f "sha=$GITHUB_SHA" -F force=true
+          else
+            gh api --silent --method POST "repos/$GH_REPO/git/refs" \
+              -f "ref=refs/tags/$tag" -f "sha=$GITHUB_SHA"
+          fi
+
+          if gh release view "$tag" > /dev/null 2>&1; then
+            gh release upload "$tag" "${assets[@]}" --clobber
+            gh release edit "$tag" --draft=false --prerelease --latest=false \
+              --title 'Nightly build' --notes ''
+          else
+            gh release create "$tag" "${assets[@]}" --verify-tag --prerelease --latest=false \
+              --title 'Nightly build' --notes ''
+          fi
