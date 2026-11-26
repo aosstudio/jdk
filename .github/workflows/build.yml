@@ -19,18 +19,18 @@ jobs:
           sudo apt-get update
           xargs --arg-file=ci/ubuntu-26.04-packages.txt sudo apt-get install --yes --no-install-recommends
 
-      - name: Build OpenJDK and Javadoc
+      - name: Build OpenJDK
         run: make build
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: jdk-linux-x86_64
-          path: out/dist/*.tar.gz
+          path: out/dist/aosstudio-jdk-*-linux-x86_64.tar.gz
           compression-level: 0
           if-no-files-found: error
           overwrite: true
 
-      - name: Verify packaged JDK and Javadoc
+      - name: Verify packaged JDK
         run: make verify
 
   publish:
@@ -55,11 +55,12 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           shopt -s nullglob
-          assets=(out/dist/*.tar.gz)
-          test "${#assets[@]}" -gt 0
-          for asset in "${assets[@]}"; do
-            test -s "$asset"
-          done
+          assets=(out/dist/aosstudio-jdk-*-linux-x86_64.tar.gz)
+          test "${#assets[@]}" -eq 1
+          test -s "${assets[0]}"
+          source_url=$(tar -xzOf "${assets[0]}" ./aosstudio-build-info.txt | sed -n 's/^OpenJDK source: //p')
+          [[ "$source_url" =~ ^https://codeload\.github\.com/openjdk/jdk21u/tar\.gz/[0-9a-f]{40}$ ]]
+          notes="[Corresponding OpenJDK source]($source_url)"
 
           tag=latest
           ref=$(gh api "repos/$GH_REPO/git/matching-refs/tags/$tag" \
@@ -75,8 +76,8 @@ jobs:
           if gh release view "$tag" > /dev/null 2>&1; then
             gh release upload "$tag" "${assets[@]}" --clobber
             gh release edit "$tag" --draft=false --prerelease --latest=false \
-              --title 'Nightly build' --notes ''
+              --title 'Nightly build' --notes "$notes"
           else
             gh release create "$tag" "${assets[@]}" --verify-tag --prerelease --latest=false \
-              --title 'Nightly build' --notes ''
+              --title 'Nightly build' --notes "$notes"
           fi

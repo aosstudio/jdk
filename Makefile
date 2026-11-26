@@ -5,9 +5,9 @@ BUILD_JOBS ?= 4
 
 JDK_VERSION := $(subst +,-,$(patsubst jdk-%,%,$(OPENJDK_TAG)))
 JDK_ASSET := aosstudio-jdk-$(JDK_VERSION)-linux-x86_64
-SOURCE_ASSET := aosstudio-jdk-$(JDK_VERSION)-sources.tar.gz
+SOURCE_ARCHIVE := aosstudio-jdk-$(JDK_VERSION)-sources.tar.gz
 
-export OPENJDK_TAG OPENJDK_COMMIT OPENJDK_SOURCE_URL OPENJDK_SHA256 JDK_ASSET SOURCE_ASSET
+export OPENJDK_TAG OPENJDK_COMMIT OPENJDK_SOURCE_URL OPENJDK_SHA256 JDK_ASSET SOURCE_ARCHIVE
 
 .PHONY: check build verify
 

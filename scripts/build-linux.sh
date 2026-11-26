@@ -19,23 +19,23 @@ out=$(realpath out)
 exec 9>"$out/build.lock"
 flock 9
 
-source_archive="$out/$SOURCE_ASSET"
+cached_source="$out/$SOURCE_ARCHIVE"
 source_tree="$out/source-$OPENJDK_SHA256"
 build_dir="$out/build-$JDK_ASSET-$OPENJDK_SHA256"
 work=$(mktemp -d "$out/work.XXXXXXXX")
 trap 'rm -rf -- "$work"' EXIT
 
-if [[ ! -f "$source_archive" ]]; then
+if [[ ! -f "$cached_source" ]]; then
     curl --fail --silent --show-error --location --retry 3 --proto '=https' --proto-redir '=https' \
         --connect-timeout 30 --max-time 600 --output "$work/source.tar.gz" "$OPENJDK_SOURCE_URL"
     printf '%s  %s\n' "$OPENJDK_SHA256" "$work/source.tar.gz" | sha256sum --check
-    mv "$work/source.tar.gz" "$source_archive"
+    mv "$work/source.tar.gz" "$cached_source"
 fi
-printf '%s  %s\n' "$OPENJDK_SHA256" "$source_archive" | sha256sum --check
+printf '%s  %s\n' "$OPENJDK_SHA256" "$cached_source" | sha256sum --check
 
 if [[ ! -d "$source_tree" ]]; then
     mkdir "$work/source"
-    tar --extract --gzip --file "$source_archive" --directory "$work/source" --strip-components=1
+    tar --extract --gzip --file "$cached_source" --directory "$work/source" --strip-components=1
     mv -T "$work/source" "$source_tree"
 fi
 
@@ -53,21 +53,17 @@ version_build=${OPENJDK_TAG##*+}
         --without-version-pre \
         --without-version-opt \
         --with-vendor-name=AOSStudio
-    env -u MAKEFLAGS -u MFLAGS -u MAKELEVEL make JOBS="$jobs" jdk-image docs
+    env -u MAKEFLAGS -u MFLAGS -u MAKELEVEL make JOBS="$jobs" jdk-image
 )
 
 jdk_image="$build_dir/images/jdk"
-docs_image="$build_dir/images/docs"
 {
     printf 'OpenJDK tag: %s\nOpenJDK commit: %s\n' "$OPENJDK_TAG" "$OPENJDK_COMMIT"
-    printf 'Source archive: %s\nHost libc: %s\n' "$SOURCE_ASSET" "$glibc"
+    printf 'OpenJDK source: %s\nOpenJDK source SHA-256: %s\n' "$OPENJDK_SOURCE_URL" "$OPENJDK_SHA256"
+    printf 'Host libc: %s\n' "$glibc"
     "$boot_jdk/bin/java" -version 2>&1
 } > "$jdk_image/aosstudio-build-info.txt"
 
-cp -- "$source_tree/LICENSE" "$source_tree/ASSEMBLY_EXCEPTION" "$docs_image/legal/"
-
 tar --create --gzip --file "$work/$JDK_ASSET.tar.gz" --directory "$jdk_image" .
-tar --create --gzip --file "$work/$JDK_ASSET-javadoc.tar.gz" --directory "$docs_image" .
-cp -- "$source_archive" "$work/$SOURCE_ASSET"
 mkdir -p "$out/dist"
-mv -f "$work/$JDK_ASSET.tar.gz" "$work/$JDK_ASSET-javadoc.tar.gz" "$work/$SOURCE_ASSET" "$out/dist/"
+mv -f "$work/$JDK_ASSET.tar.gz" "$out/dist/"
